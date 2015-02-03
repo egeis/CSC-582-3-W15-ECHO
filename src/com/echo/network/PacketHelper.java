@@ -6,10 +6,12 @@ package com.echo.network;
  */
 public class PacketHelper {
     
-    public static final int TYPE_REPLY = 1;
-    public static final int TYPE_BROADCAST = 2;
+    public static final int REPLY = 1;
+    public static final int BROADCAST = 2;
+    public static final int WAVE_REPLY = 3;
+    public static final int WAVE_BROADCAST = 4;
     
-    public static final int TYPE_SHUTDOWN = 21;
+    public static final int SHUTDOWN = 21;
 
     /**
      * Gets a Packet containing only a message type.
