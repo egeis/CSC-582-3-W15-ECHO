@@ -7,6 +7,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -22,6 +23,8 @@ public class Node {
     private ObjectOutputStream output;
         
     private boolean shutdown = false;
+    
+    private static ArrayList<Integer> adj = new ArrayList<Integer>();
     
     private Node(int port)
     {        
@@ -72,17 +75,26 @@ public class Node {
         int port = 0;
         int id = 0;
         
-        if(args.length > 0 && args.length > 3)
+        if(args.length > 2)
         {
+            //Setup Port and ID.
             port = Integer.parseInt(args[0]);
             id = Integer.parseInt(args[1]);
+            LOGGER = Logger.getLogger(Node.class.getName()+port);
+            
+            //Get Adjacent List
+            for(int i = 2; i < args.length; i++)
+            {
+                adj.add(Integer.parseInt(args[i]));
+            }
         } 
         else 
         {
-            System.exit(1);
+            LOGGER.log(Level.SEVERE, "Invalid Argument Length.");
+            System.exit(1);     //Something Went Wrong...
         }
         
-        LOGGER = Logger.getLogger(Node.class.getName()+port);
         Node node = new Node(port);
+        System.out.println("Exiting...");
     }
 }
