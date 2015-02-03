@@ -23,6 +23,7 @@ public class CounterNode
     public static void main(String[] args)
     {
         long counter = 0;   //Counter
+        int id = 0;
         int port = 1212;    //Default Port
         
         //Custom Port
@@ -43,9 +44,9 @@ public class CounterNode
                 input = new ObjectInputStream(socket.getInputStream());
                 int send = input.readInt();
                 output = new ObjectOutputStream(socket.getOutputStream());
-                output.writeLong(++counter);
+                if(send == 0) output.writeLong(++counter);
+                else if(send == 1) output.writeInt(++id);
                 socket.close();
-                
                 if(send == -1) break;                        
             } catch (IOException ex) {
                 LOGGER.log(Level.WARNING, null, ex);
