@@ -6,12 +6,9 @@ package main.java.com.echo.network;
  */
 public class PacketHelper {
     
-    public static final int REPLY = 1;
-    public static final int BROADCAST = 2;
-    public static final int WAVE_REPLY = 3;
-    public static final int WAVE_BROADCAST = 4;
-    
-    public static final int SHUTDOWN = 21;
+    public static final int MESSAGE              = 1;
+    public static final int INIT_SHUTDOWN        = 30;
+    public static final int INIT_INITIATOR       = 31;
 
     /**
      * Gets a Packet containing only a message type.
