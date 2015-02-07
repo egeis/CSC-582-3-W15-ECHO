@@ -1,4 +1,4 @@
-package com.echo;
+package main.java.com.echo;
 
 import java.io.IOException;
 import java.io.DataInputStream;

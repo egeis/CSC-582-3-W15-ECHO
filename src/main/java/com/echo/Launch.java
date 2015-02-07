@@ -1,7 +1,8 @@
-package com.echo;
+package main.java.com.echo;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -31,7 +32,7 @@ public class Launch {
         
         if(path.charAt(0) == '/')
         {
-            StringBuffer sb = new StringBuffer(path);
+            StringBuilder sb = new StringBuilder(path);
             sb.deleteCharAt(0);
             path = sb.toString();
         }
@@ -40,6 +41,13 @@ public class Launch {
         {
             count_port = Integer.parseInt(args[0]);
             nodes = args[1];
+        } else if(args.length > 0 && args.length < 2)  {
+            nodes = args[0];
+        } else {
+            ClassLoader classLoader = Launch.class.getClassLoader();
+            File file = new File(classLoader.getResource("file/nodes.txt").getFile());
+            
+            System.exit(1);
         }
         
         System.out.println("Jar Location:"+path);
@@ -57,7 +65,7 @@ public class Launch {
         } 
         
         System.out.println("Starting: Sending for ID's");
-        
+                
         for(int i = 0; i < 10; i++)
         {
             try {
@@ -65,26 +73,17 @@ public class Launch {
                 output = new DataOutputStream (socket.getOutputStream()); 
                 input = new DataInputStream(socket.getInputStream());
                 
-                boolean conn = socket.isConnected();
-                boolean is = !socket.isInputShutdown();
-                boolean os = !socket.isInputShutdown();
-                System.out.println("Connected:"+conn+" Input Stream:"+is+" Output Stream:"+os);
+                output.writeInt(2);
+                output.flush();                                
+                int id = input.readInt();
                 
-                if(conn) 
-                {
-                    output.writeInt(2);
-                    output.flush();                                
-                    int id = input.readInt();
-                    System.out.println("Test:"+id);
-                }
+                
                 
                 output.close();
                 input.close();
                 socket.close();
             } catch (IOException ex) {
                 ex.printStackTrace();
-                
-                
             }
         }
         

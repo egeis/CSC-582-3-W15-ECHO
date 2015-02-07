@@ -1,4 +1,4 @@
-package com.echo.network;
+package main.java.com.echo.network;
 
 /**
  * Creates the Packet Object to send across nodes.

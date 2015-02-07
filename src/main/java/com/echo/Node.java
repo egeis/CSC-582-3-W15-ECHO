@@ -1,7 +1,7 @@
-package com.echo;
+package main.java.com.echo;
 
-import com.echo.network.Packet;
-import com.echo.network.PacketHelper;
+import main.java.com.echo.network.Packet;
+import main.java.com.echo.network.PacketHelper;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;

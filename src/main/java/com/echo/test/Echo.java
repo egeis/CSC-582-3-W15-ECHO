@@ -1,4 +1,4 @@
-package com.echo.test;
+package main.java.com.echo.test;
 
 /**
  *
