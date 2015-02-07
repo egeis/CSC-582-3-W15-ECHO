@@ -1,8 +1,8 @@
 package com.echo;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.logging.Level;
@@ -17,8 +17,8 @@ public class CounterNode
     private final static Logger LOGGER = Logger.getLogger(Node.class.getName());
                 
     private static ServerSocket server;
-    private static ObjectInputStream input;
-    private static ObjectOutputStream output;
+    private static DataInputStream input;
+    private static DataOutputStream output;
     
     public static void main(String[] args)
     {
@@ -38,14 +38,16 @@ public class CounterNode
             System.exit(1);
         }
         
+        System.out.println(CounterNode.class.getName()+":ready");
+        
         while(true)
         { 
             try (Socket socket = server.accept()) {
-                input = new ObjectInputStream(socket.getInputStream());
+                input = new DataInputStream(socket.getInputStream());
                 int send = input.readInt();
-                output = new ObjectOutputStream(socket.getOutputStream());
-                if(send == 0) output.writeLong(++counter);
-                else if(send == 1) output.writeInt(++id);
+                output = new DataOutputStream(socket.getOutputStream());
+                if(send == 1) output.writeLong(++counter);
+                else if(send == 2) output.writeInt(++id);
                 socket.close();
                 if(send == -1) break;                        
             } catch (IOException ex) {
