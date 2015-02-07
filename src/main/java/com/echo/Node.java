@@ -7,9 +7,12 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import main.java.com.echo.network.Conn;
 
 /**
  *
@@ -22,32 +25,36 @@ public class Node {
     private ObjectInputStream input;
     private ObjectOutputStream output;
     private boolean shutdown = false;
-    private int parent = -1;
-    private int id = -1;
+    
+    private Integer parent = null;
+    private Integer id = null;
     private int port = -1;
+    private String host = "";
+    private Boolean isInit = false;
     
-    public static String TIMER_HOST = "localhost";
-    public static int TIMER_PORT = 1212;
-        
-    protected static ArrayList<Conn> adj = new ArrayList<Conn>();
+    private static Map<Integer,Conn.Child> children = new HashMap<Integer,Conn.Child>();
+    private static Map<Integer,Boolean> replies = new HashMap<Integer,Boolean>();
     
+//    public static String TIMER_HOST = "localhost";
+//    public static int TIMER_PORT = 1212;
+            
     private Node()
     {        
-        //Get an ID
-        try ( 
-            Socket socket = new Socket(TIMER_HOST, TIMER_PORT)) {
-            output = new ObjectOutputStream(socket.getOutputStream());
-            output.writeInt(1);
-            output.flush();
-            
-            input = new ObjectInputStream(socket.getInputStream());
-            id = input.readInt();
-            socket.close();
-        } catch (IOException ex) {
-            Logger.getLogger(Node.class.getName()).log(Level.SEVERE, null, ex);
-        } finally {
-            acceptMessages();
-        }
+//        /**Get an ID**/
+//        try ( 
+//            Socket socket = new Socket(TIMER_HOST, TIMER_PORT)) {
+//            output = new ObjectOutputStream(socket.getOutputStream());
+//            output.writeInt(1);
+//            output.flush();
+//            
+//            input = new ObjectInputStream(socket.getInputStream());
+//            id = input.readInt();
+//            socket.close();
+//        } catch (IOException ex) {
+//            Logger.getLogger(Node.class.getName()).log(Level.SEVERE, null, ex);
+//        }
+        
+        acceptMessages();
     }
     
     private void acceptMessages()
@@ -81,13 +88,19 @@ public class Node {
      /**
      * Sends a packet of data to the initiator.
      * @param p the packet.
+     * @param the type of send, 0 for parent, 1 for children (excluding parent)
+     * 2 for all.
      */
-    private void sendPacket(Packet p)
+    private void sendPacket(Packet p, int type)
     {        
         try {
-            for(Conn c : adj) 
+            for(Entry<Integer,Conn.Child> entry : children.entrySet()) 
             {
-                if(c.id == this.parent) continue;
+                Conn.Child c = entry.getValue();
+                Integer key = entry.getKey();
+                
+                if(key == (Integer) this.parent && type == 1) continue;
+                else if((key != (Integer) this.parent && type == 0)) continue;
                 
                 Socket out = new Socket(c.host, c.port);    
                 output = new ObjectOutputStream(out.getOutputStream()); 
@@ -104,19 +117,26 @@ public class Node {
     {        
         switch(p.type) 
         {
-            case PacketHelper.BROADCAST:
+            case PacketHelper.MESSAGE:
+                if(parent == null)
+                {
+                    parent = p.id;
+                    Packet send = PacketHelper.getPacket(PacketHelper.MESSAGE, id, id);
+                    sendPacket(send,1);
+                } else {
+                    
+                }
                 break;
-            case PacketHelper.REPLY:
+            case PacketHelper.INIT_INITIATOR:
+                isInit = true;
+                Packet send = PacketHelper.getPacket(PacketHelper.MESSAGE, id, id);
+                sendPacket(send,2);
                 break;
-            case PacketHelper.WAVE_BROADCAST:
-                break;
-            case PacketHelper.WAVE_REPLY:
-                break;
-            case PacketHelper.SHUTDOWN:
+            case PacketHelper.INIT_SHUTDOWN:
                 shutdown = true;
                 break;
             default:
-                
+                //Do Nothing.
         }
     }
     
@@ -124,24 +144,28 @@ public class Node {
     {
         int port = 0;
         int id = 0;
+        String host = "";
         
         if(args.length > 2 )
         {
             //Setup Port and ID.
-            port = Integer.parseInt(args[0]);
-            id = Integer.parseInt(args[1]);
+            String parts[] = args[0].split(":");
+            id = Integer.parseInt(parts[0]);
+            host = parts[1];
+            port = Integer.parseInt(parts[2]);
+            
             LOGGER = Logger.getLogger(Node.class.getName()+port);
             
             //Get Adjacent List
-            for(int i = 2; i < args.length; i++)
+            for(int i = 1; i < args.length; i++)
             {
-                String[] parts = args[i].split(":");
+                parts = args[i].split(":");
                                 
-                Conn c = new Conn();
-                c.host = parts[0];
-                c.port = Integer.parseInt(parts[1]);
+                Conn.Child c = new Conn.Child();
+                c.host = parts[1];
+                c.port = Integer.parseInt(parts[2]);
                 
-                adj.add(c);
+                children.put(Integer.parseInt(parts[0]), c);
             }
         } 
         else 
@@ -152,17 +176,5 @@ public class Node {
         
         Node node = new Node();
         System.out.println("Exiting...");
-    }
-    
-    protected static class Conn 
-    {
-        public String host;
-        public int port;
-        public int id = 0;
-        
-        public String toString()
-        {
-            return "[Host:"+host+", Port:"+port+"]";
-        }
     }
 }
