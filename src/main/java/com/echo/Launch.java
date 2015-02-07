@@ -2,40 +2,48 @@ package main.java.com.echo;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.File;
 import java.io.IOException;
-import java.io.ObjectInputStream;
+import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.net.URLDecoder;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import javax.json.Json;
+import javax.json.JsonArray;
+import javax.json.JsonObject;
+import javax.json.JsonReader;
+import main.java.com.echo.network.Conn;
+import main.java.com.echo.network.Packet;
+import main.java.com.echo.network.PacketHelper;
 
 /**
  *
  * @author Richard Coan
  */
 public class Launch {
-
-    private static DataInputStream input;
-    private static DataOutputStream output;
     
     /**
      * @param args the command line arguments
+     * @throws java.io.UnsupportedEncodingException
      */
     public static void main(String[] args) throws UnsupportedEncodingException {
         String path = Launch.class.getProtectionDomain().getCodeSource().getLocation().getPath();
         path = URLDecoder.decode(path, "UTF-8");
          
-        int count_port = 1214;
-        String nodes = "nodes.txt";
+        System.out.println("Jar Location:"+path);
+        
+        int count_port = 1213;
+        String nodes = "nodes.json";
         
         if(path.charAt(0) == '/')
-        {
-            StringBuilder sb = new StringBuilder(path);
-            sb.deleteCharAt(0);
-            path = sb.toString();
-        }
+            path = new StringBuilder(path).deleteCharAt(0).toString();
         
         if(args.length > 0 && args.length < 3)
         {
@@ -44,67 +52,140 @@ public class Launch {
         } else if(args.length > 0 && args.length < 2)  {
             nodes = args[0];
         } else {
-            ClassLoader classLoader = Launch.class.getClassLoader();
-            File file = new File(classLoader.getResource("file/nodes.txt").getFile());
-            
-            System.exit(1);
+            nodes = "main/resources/"+nodes;    //Default
         }
         
-        System.out.println("Jar Location:"+path);
+        /*Load Topology*/
+        System.out.println("Loading Nodes Configuration.");
         
-        ArrayList<Process> processes = new ArrayList<Process>();
+        ClassLoader classLoader = Launch.class.getClassLoader();
+        InputStream is = classLoader.getResourceAsStream(nodes);
+               
+        JsonReader rdr = Json.createReader(is);       
+        JsonObject obj = rdr.readObject();
+        JsonArray results = obj.getJsonArray("nodes");
         
-        Process CounterServer;
-        boolean ready = false;
+        Map<Integer, Conn> conns = new HashMap<Integer, Conn>();
+        Map<Integer, Integer[]> adjacent = new HashMap<Integer, Integer[]>();
+              
+        Integer largest = null;
         
-        try {
-            System.out.println("Starting Counter Server");
-            CounterServer = Runtime.getRuntime().exec("java -cp "+path+" com.echo.CounterNode " + count_port);
-        } catch (IOException ex) {
-            ex.printStackTrace();        
-        } 
+        for (JsonObject result : results.getValuesAs(JsonObject.class)) {
+            Conn c = new Conn();
+            c.host = result.getString("host");
+            c.id = result.getInt("id");
+            c.port = result.getInt("port");
+            
+            JsonArray nbs = result.getJsonArray("adj");
+            
+            Integer[] a = new Integer[nbs.size()];
+            for(int i = 0; i < nbs.size(); i++)
+            {
+                a[i] = nbs.getInt(i);
+            }
+            
+            adjacent.put(c.id, a);            
+            conns.put(c.id, c);
+                    
+            if(largest == null)
+                largest = c.id;
+            else
+                if(c.id > largest) largest = c.id;
+        }
         
-        System.out.println("Starting: Sending for ID's");
-                
-        for(int i = 0; i < 10; i++)
+        /*Add Children*/
+        for (Conn c : conns.values())
         {
+            Integer[] ports = adjacent.get(c.id);
+            
+            for(int i = 0 ; i < ports.length; i++)
+            {
+                Conn.Child d = new Conn.Child();
+                d.host = conns.get( ports[i] ).host;
+                d.port = conns.get( ports[i] ).port;
+                c.adj.put(ports[i],d);
+            }
+                
+            System.out.println(conns.get(c.id).toString());
+        }
+        
+        System.out.println("Candidate Initiator:"+largest);
+                       
+//        "id" : 1,
+//        "host" : "localhost",
+//        "port" : 1215,
+//        "adj" : [2,4]
+               
+//        Process CounterServer;
+//        
+//        try {
+//            System.out.println("Starting Counter Server");
+//            CounterServer = Runtime.getRuntime().exec("java -cp "+path+" main.java.com.echo.CounterNode " + count_port);
+//            System.out.println("Created:"+CounterServer.isAlive());
+//        } catch (IOException ex) {
+//            ex.printStackTrace();        
+//        } 
+               
+        ArrayList<Process> processes = new ArrayList<Process>();
+        for(Entry<Integer, Conn> entry : conns.entrySet())
+        {
+            Conn c = entry.getValue();
             try {
-                Socket socket = new Socket("localhost", count_port);
-                output = new DataOutputStream (socket.getOutputStream()); 
-                input = new DataInputStream(socket.getInputStream());
+                System.out.println("Starting Node:"+c.id);
                 
-                output.writeInt(2);
-                output.flush();                                
-                int id = input.readInt();
+                StringBuilder sb = new StringBuilder();
+                sb.append(c.id+":"+c.host+":"+c.port+" ");
                 
+                for(Entry<Integer, Conn.Child> d : c.adj.entrySet())
+                {
+                    Conn.Child child = d.getValue();
+                    sb.append(d.getKey()+":"+child.host+":"+child.port+" ");
+                }
                 
-                
-                output.close();
-                input.close();
+                Process last = Runtime.getRuntime().exec("java -cp "+path+" main.java.com.echo.Node "+sb.toString() );
+                processes.add(last);
+                System.out.println("Created:"+last.isAlive());
+            } catch (IOException ex) {
+                Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, null, ex);
+            } 
+        }
+        
+        /*Shut down*/
+//        System.out.println("Shutting down counter server.");
+//        try {
+//            Socket socket = new Socket("localhost", count_port);
+//            DataOutputStream os = new DataOutputStream(socket.getOutputStream()); 
+//            os.writeInt(-1);
+//            os.flush();
+//            os.close();
+//            socket.close();
+//        } catch (IOException ex) {
+//            ex.printStackTrace();       
+//        }
+        
+        for(Entry<Integer, Conn> entry : conns.entrySet())
+        {
+            Conn c = entry.getValue();
+            Socket socket;
+            try {
+                socket = new Socket(c.host, c.port);
+                ObjectOutputStream os = new ObjectOutputStream(socket.getOutputStream()); 
+                Packet p = PacketHelper.getPacket(PacketHelper.INIT_SHUTDOWN, 0, 0);
+                os.writeObject(p);
+                os.flush();
+                os.close();
                 socket.close();
             } catch (IOException ex) {
-                ex.printStackTrace();
+                Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, null, ex);
             }
-        }
-        
-        //Shut down the Counter Server.
-        System.out.println("Shutting down counter server.");
-        try {
-            Socket socket = new Socket("localhost", count_port);
-            output = new DataOutputStream(socket.getOutputStream()); 
-            output.writeInt(-1);
-            output.flush();
-            socket.close();
-        } catch (IOException ex) {
-            ex.printStackTrace();       
-        }
+        }        
         
         //Holds the Launcher from exiting, to debug counter server status.
         System.out.println("Press any key to exit.");
         try {
             System.in.read();
         } catch (IOException ex) {
-            ex.printStackTrace();
+            Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
-}
+}   
