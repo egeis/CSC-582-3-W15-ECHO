@@ -2,16 +2,22 @@ package main.java.com.echo;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.net.URLDecoder;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Scanner;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -108,14 +114,9 @@ public class Launch {
                 
             System.out.println(conns.get(c.id).toString());
         }
-        
-        System.out.println("Candidate Initiator:"+largest);
-                       
-//        "id" : 1,
-//        "host" : "localhost",
-//        "port" : 1215,
-//        "adj" : [2,4]
-               
+        largest = 1;
+        System.out.println("Candidate Initiator Node:"+largest);
+                                      
 //        Process CounterServer;
 //        
 //        try {
@@ -131,10 +132,9 @@ public class Launch {
         {
             Conn c = entry.getValue();
             try {
-                System.out.println("Starting Node:"+c.id);
-                
                 StringBuilder sb = new StringBuilder();
                 sb.append(c.id+":"+c.host+":"+c.port+" ");
+                System.out.println("Starting Node:"+sb.toString());
                 
                 for(Entry<Integer, Conn.Child> d : c.adj.entrySet())
                 {
@@ -149,6 +149,52 @@ public class Launch {
                 Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, null, ex);
             } 
         }
+        
+        /* Set the Initiator */
+        Conn ini = conns.get(largest);
+        try {
+            Socket socket = new Socket(ini.host, ini.port);
+            ObjectOutputStream os = new ObjectOutputStream(socket.getOutputStream()); 
+            Packet p = PacketHelper.getPacket(PacketHelper.INIT_INITIATOR, -1, 0);
+            os.writeObject(p);
+            os.flush();
+            os.close();
+            socket.close();
+        } catch (IOException ex) {
+            Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, "Error Starting Initiator:"+ini.host+":"+ini.port, ex);
+        }
+        
+        Process init = processes.get(largest - 1);
+        
+        try {
+            init.waitFor();
+        } catch (InterruptedException ex) {
+            Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        conns.remove( largest );
+        
+        /* Collect the Nodes Parents */
+//        AtomicBoolean isCanceled = new AtomicBoolean(false);
+//       
+//        Runnable r1 = new Runnable() {
+//            public void run() {
+//                System.out.println("Cancel?");
+//                try {
+//                    System.in.read();
+//                    isCanceled.set(true);
+//                } catch (IOException ex) {
+//                    Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, null, ex);
+//                }
+//            }
+//        };
+//            
+//        Thread t1 = new Thread(r1);
+//        t1.start();
+//        
+//        System.out.println("The Initiator is Process #"+(largest-1));
+//        while(processes.get(largest - 1).isAlive() && !isCanceled.get() ) {}                
+//        conns.remove( largest );  //Do need to stop a terminated program.
+//        t1.interrupt();
         
         /*Shut down*/
 //        System.out.println("Shutting down counter server.");
@@ -170,22 +216,65 @@ public class Launch {
             try {
                 socket = new Socket(c.host, c.port);
                 ObjectOutputStream os = new ObjectOutputStream(socket.getOutputStream()); 
-                Packet p = PacketHelper.getPacket(PacketHelper.INIT_SHUTDOWN, 0, 0);
+                Packet p = PacketHelper.getPacket(PacketHelper.INIT_SHUTDOWN, -1, 0);
                 os.writeObject(p);
                 os.flush();
                 os.close();
                 socket.close();
             } catch (IOException ex) {
-                Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, c.host+":"+c.port, ex);
             }
-        }        
+        }    
+        
+        Map<Integer, ArrayList<String>> parents = new HashMap();
+        
+        try {
+            Files.walk(Paths.get(System.getProperty("user.dir")+"/logs/")).forEach(filePath -> {
+                if (Files.isRegularFile(filePath)) {
+                    System.out.println(filePath);
+                    Integer key = Integer.parseInt(filePath.toString().split("_")[1]);
+                    
+                    Scanner scanner;
+                    ArrayList<String> lines = new ArrayList<String>();
+                    try {
+                        scanner = new Scanner(filePath.toFile());
+                        while (scanner.hasNextLine()) {
+                            lines.add(scanner.nextLine());
+                        }
+                    } catch (FileNotFoundException ex) {
+                        Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                    
+                    if(lines.size() > 0)
+                    {
+                        String parent = lines.get(lines.size() - 1).split(":")[2];
+                        if(parents.containsKey(key))
+                        {
+                            ArrayList<String> a = parents.get(key);
+                            a.add(parent);
+                            
+                            parents.replace(key, a);
+                        } else {
+                            ArrayList<String> a = new ArrayList();
+                            a.add(parent);
+                            
+                            parents.put(key, a);
+                        }
+                    }
+                }
+            });
+        } catch (IOException ex) {
+            Logger.getLogger(Node.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        
+        System.out.println(parents.toString());
         
         //Holds the Launcher from exiting, to debug counter server status.
-        System.out.println("Press any key to exit.");
-        try {
-            System.in.read();
-        } catch (IOException ex) {
-            Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, null, ex);
-        }
+//        System.out.println("Press any key to exit.");
+//        try {
+//            System.in.read();
+//        } catch (IOException ex) {
+//            Logger.getLogger(Launch.class.getName()).log(Level.SEVERE, null, ex);
+//        }
     }
 }   
